@@ -1,31 +1,34 @@
 # Whisper Streaming for Wowza Streaming Engine
 
-This provides a docker container to run a Whisper services that integrates with WSE module *********
+This provides a docker container to run a Whisper services that integrates with Wowza Streaming Engine module [wse-plugin-caption-handlers](https://github.com/WowzaMediaSystems/wse-plugin-caption-handlers)
 It can also run standalone and pull in an RTMP stream using ffmpeg 
 
 ## Usage
 
-### Dockerfile
-
-Dockerfile to build a phyton application using OpenAI Whisper that listens on a port that recieves raw audio and returns JSON for detected speach that gets integrate with the video feed as webVTT
-
-### local_build.sh
-
-Builds the docker container with the tag `whisper_streaming:local`
-
-### local_run.sh
-
-Runs the whipser server with a set of variables.
-
-### docker-compose.yaml
-
-A docker compose file that includes the WSE and WSEM and runs Whisper
 
 
-### Docker Environment Variables
+### Files
+
+##### Dockerfile
+
+> Dockerfile to build a phyton application using OpenAI Whisper that listens on a port that recieves raw audio and returns JSON for detected speach that gets integrate with the video feed as webVTT
+
+##### local_build.sh
+
+>Builds the docker container with the tag `whisper_streaming:local`
+
+##### local_run.sh
+
+> Runs the whipser server docker container with a set of variables.
+
+##### docker-compose.yaml
+
+> A docker compose file that includes WSE and WSEM and runs Whisper
+
+### Environment Variables
 
 |Variable  |Default  |Description |
-|----------|---------|------------|
+|:---------|--------:|:-----------|
 |BACKEND   |faster-whisper| [faster-whisper,whisper_timestamped,openai-api] Load only this backend for Whisper processing.|
 |MODEL     |  tiny.en| [tiny.en,tiny,base.en,base,small.en,small,medium.en,medium,large-v1,large-v2,large-v3,large,large-v3-turbo] Name size of the Whisper model to use. The model is automatically downloaded from the model hub if not present in model cache dir. (/tmp)|
 |LANGUAGE  |     auto| Source language code, e.g. en,de,cs, or 'auto' for language detection.|
@@ -35,10 +38,9 @@ A docker compose file that includes the WSE and WSEM and runs Whisper
 |SAMPLING_RATE | 16000| Sample rate of the Audio.  |
 |REPORT_LANGUAGE | none| Language to report back to WSE|
 
-
 ### JSON
 
-The service returns a json object in the format
+The service returns a json object in the format to the websocket
 ```json
 {
     "language": "en",
@@ -56,6 +58,7 @@ This container and Whisper does support NVIDIA GPU for increased performance wit
 ## Acknowledgments
 
 This project builds upon the work from:
+
 - [Whisper Streaming](https://github.com/ufal/whisper_streaming)
 - [OpenAI Whisper](https://github.com/openai/whisper)
 
