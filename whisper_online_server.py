@@ -6,15 +6,23 @@ import argparse
 import os
 import logging
 import numpy as np
+import time
+import subprocess
+import threading
+import signal
+import datetime
+import json
 
 logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser()
 
 # server options
 parser.add_argument("--host", type=str, default='localhost')
-parser.add_argument("--port", type=int, default=43007)
+parser.add_argument("--port", type=int, default=3000)
 parser.add_argument("--warmup-file", type=str, dest="warmup_file", 
         help="The path to a speech audio wav file to warm up Whisper so that the very first chunk processing is fast. It can be e.g. https://github.com/ggerganov/whisper.cpp/raw/master/samples/jfk.wav .")
+parser.add_argument("--source-stream", type=str, default=None)
+parser.add_argument("--report-language", type=str, default=None)
 
 # options from whisper_online
 add_shared_args(parser)
@@ -22,10 +30,10 @@ args = parser.parse_args()
 
 set_logging(args,logger,other="")
 
+running=True
 # setting whisper object by args 
 
-SAMPLING_RATE = 16000
-
+SAMPLING_RATE = args.sampling_rate
 size = args.model
 language = args.lan
 asr, online = asr_factory(args)
@@ -87,6 +95,21 @@ import soundfile
 # next client should be served by a new instance of this object
 class ServerProcessor:
 
+    def timedelta_to_webvtt(self,delta):
+    #Format this:0:00:00
+    #Format this:0:00:09.480000
+      parts = delta.split(":")
+      parts2 = parts[2].split(".")
+
+      final_data  = "{:02d}".format(int(parts[0])) + ":"
+      final_data += "{:02d}".format(int(parts[1])) + ":"
+      final_data += "{:02d}".format(int(parts2[0])) + "."
+      if(len(parts2) == 1):
+        final_data += "000"
+      else:
+        final_data += "{:03d}".format(int(int(parts2[1])/1000))
+      return final_data
+
     def __init__(self, c, online_asr_proc, min_chunk):
         self.connection = c
         self.online_asr_proc = online_asr_proc
@@ -97,12 +120,13 @@ class ServerProcessor:
         self.is_first = True
 
     def receive_audio_chunk(self):
+        global running
         # receive all audio that is available by this time
         # blocks operation if less than self.min_chunk seconds is available
         # unblocks if connection is closed or a chunk is available
         out = []
         minlimit = self.min_chunk*SAMPLING_RATE
-        while sum(len(x) for x in out) < minlimit:
+        while running and sum(len(x) for x in out) < minlimit:
             raw_bytes = self.connection.non_blocking_receive_audio()
             if not raw_bytes:
                 break
@@ -119,66 +143,117 @@ class ServerProcessor:
         return np.concatenate(out)
 
     def format_output_transcript(self,o):
-        # output format in stdout is like:
-        # 0 1720 Takhle to je
-        # - the first two words are:
-        #    - beg and end timestamp of the text segment, as estimated by Whisper model. The timestamps are not accurate, but they're useful anyway
-        # - the next words: segment transcript
-
         # This function differs from whisper_online.output_transcript in the following:
         # succeeding [beg,end] intervals are not overlapping because ELITR protocol (implemented in online-text-flow events) requires it.
         # Therefore, beg, is max of previous end and current beg outputed by Whisper.
         # Usually it differs negligibly, by appx 20 ms.
 
         if o[0] is not None:
-            beg, end = o[0]*1000,o[1]*1000
+            beg, end = o[0],o[1]
             if self.last_end is not None:
                 beg = max(beg, self.last_end)
 
             self.last_end = end
-            print("%1.0f %1.0f %s" % (beg,end,o[2]),flush=True,file=sys.stderr)
-            return "%1.0f %1.0f %s" % (beg,end,o[2])
+            beg_webvtt = self.timedelta_to_webvtt(str(datetime.timedelta(seconds=beg)))
+            end_webvtt = self.timedelta_to_webvtt(str(datetime.timedelta(seconds=end)))
+            logger.info("%s -> %s %s" % (beg_webvtt, end_webvtt, o[2].strip()))
+
+            data = {}
+            if(report_language != None and report_language != 'none'):
+                data['language'] = "en"
+            data['start'] = "%1.3f" % datetime.timedelta(seconds=beg).total_seconds()
+            data['end'] = "%1.3f" % datetime.timedelta(seconds=end).total_seconds()
+            data['text'] = o[2].strip()
+
+            #return "%1.0f %1.0f %s" % (beg,end,o[2])
+            return json.dumps(data)
         else:
             logger.debug("No text in this segment")
             return None
 
     def send_result(self, o):
         msg = self.format_output_transcript(o)
-        if msg is not None:
+        if msg is not None and (source_stream == None or source_stream == 'none'):
             self.connection.send(msg)
 
     def process(self):
+        global running
         # handle one client connection
         self.online_asr_proc.init()
-        while True:
+        first_time = True
+        while running:
             a = self.receive_audio_chunk()
             if a is None:
+                if first_time:
+                    logger.debug("No audio, exiting")
+                else:
+                    logger.info("No audio, exiting")
                 break
-            self.online_asr_proc.insert_audio_chunk(a)
-            o = online.process_iter()
-            try:
-                self.send_result(o)
-            except BrokenPipeError:
-                logger.info("broken pipe -- connection closed?")
-                break
+            else:
+                if first_time:
+                    first_time = False
+                    logger.info("Receiving Audio")
+                
+                self.online_asr_proc.insert_audio_chunk(a)
+                o = online.process_iter()
+                try:
+                    self.send_result(o)
+                except BrokenPipeError:
+                    logger.info("broken pipe -- connection closed?")
+                    break
 
-#        o = online.finish()  # this should be working
-#        self.send_result(o)
+def run_subprocess(command):
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    return stdout.decode(), stderr.decode(), process.returncode
 
+def worker_thread(command):
+    global running    
+    while running:
+        stdout, stderr, returncode = run_subprocess(command)
+        logger.debug(f"Return Code: {returncode}")
+        time.sleep(1.0)
+
+def stop(self, signum=None, frame=None):
+    global running,server_socket
+    server_socket.close()
+    running = False
+
+# source_stream = "rtmp://wse.docker/live/myStream_160p"
+#command = "ffmpeg -hide_banner -loglevel error -f flv -i rtmp://host.docker.internal/live/myStream_aac -c:a pcm_s16le -ac 1 -ar 16000 -f s16le - | nc -q 1 localhost 3000"
+#command = "ffmpeg -hide_banner -loglevel error -f flv -i rtmp://d93ab27c23fd-qa.entrypoint.cloud.wowza.com/app-Qp8R494H/259c678c_stream7 -c:a pcm_s16le -ac 1 -ar 16000 -f s16le - | nc -q 1 localhost 3000"
+report_language = args.report_language
+source_stream = args.source_stream
+if source_stream != None and source_stream != 'none':
+    command = "ffmpeg -hide_banner -loglevel error -f flv -i " + source_stream + " -vn -c:a pcm_s16le -ac 1 -ar " + str(SAMPLING_RATE) + " -f s16le - | nc -q 1 localhost 3000"
+    logger.info("Running ffmpeg to connect stream "+source_stream+ " with whisper server:")
+    logger.info("    " + command)
+    thread = threading.Thread(target=worker_thread, args=(command,))
+    thread.start()
 
 
 # server loop
 
+signal.signal(signal.SIGINT, stop)
+signal.signal(signal.SIGTERM, stop)
+
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    global server_socket
+    server_socket = s
     s.bind((args.host, args.port))
     s.listen(1)
     logger.info('Listening on'+str((args.host, args.port)))
-    while True:
-        conn, addr = s.accept()
-        logger.info('Connected to client on {}'.format(addr))
-        connection = Connection(conn)
-        proc = ServerProcessor(connection, online, args.min_chunk_size)
-        proc.process()
-        conn.close()
-        logger.info('Connection to client closed')
-logger.info('Connection closed, terminating.')
+    while running:
+        try:
+            conn, addr = s.accept()
+            logger.debug('Connected to client on {}'.format(addr))
+            connection = Connection(conn)
+            proc = ServerProcessor(connection, online, args.min_chunk_size)
+            proc.process()
+            conn.close()
+        except socket.error as e:
+          break # Exit the loop on socket errors            
+        logger.debug('Connection to client closed{}'.format(addr))
+
+logger.info('Server Stopped')
+running=False
