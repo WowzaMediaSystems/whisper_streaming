@@ -4,10 +4,25 @@ This provides a docker container to run a Whisper services that integrates with 
 
 
 ## Usage
-local build 
-local run
 
-Environment variables
+### Dockerfile
+
+Dockerfile to build a phyton application using OpenAI Whisper that listens on a port that recieves raw audio and returns JSON for detected speach
+
+### local_build.sh
+
+Builds the docker container with the tag `whisper_streaming:local`
+
+### local_run.sh
+
+Runs the whipser server with a set of variables.
+
+### docker-compose.yaml
+
+A docker compose file that includes the WSE and WSEM and runs Whisper
+
+
+### Docker Environment Variables
 
 |Variable  |Default  |Description |
 |----------|---------|------------|
@@ -16,10 +31,15 @@ Environment variables
 |LANGUAGE  |     auto| Source language code, e.g. en,de,cs, or 'auto' for language detection.|
 |LOG_LEVEL |     INFO| [DEBUG,INFO,WARNING,ERROR,CRITICAL] The level for logging|
 |SOURCE_STREAM | none| an RTMP url to pull a stream in.  Uses ffmpeg to capture the auto and forward to the service |
-|MIN_CHUNK_SIZE | 1| Minimum audio chunk size in seconds. It waits up to this time to do processing. If the processing takes shorter time, it waits, otherwise it processes the whole segment that was
-                        received by this time.|
+|MIN_CHUNK_SIZE | 1| Minimum audio chunk size in seconds. It waits up to this time to do processing. If the processing takes shorter time, it waits, otherwise it processes the whole segment that was received by this time.|
 |SAMPLING_RATE | 16000| Sample rate of the Audio.  |
 |REPORT_LANGUAGE | none| Language to report back to WSE|
+
+
+### GPU
+
+This container and Whisper does support NVIDIA GPU for increased performance with larger models.  Run the docker container with `--gpus all`
+ and `-e FP16=true` along with adding `torch` and `triton` python libraries in the Dockerfile.
 
 
 [Original README.md](https://github.com/WowzaMediaSystems/whisper_streaming/blob/main/README_ORG.md)
