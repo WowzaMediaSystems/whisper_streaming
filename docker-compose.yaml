@@ -10,8 +10,8 @@ services:
         env_file: .env
         environment:
             - WSE_LICENSE_KEY=$WSE_LICENSE_KEY
-            - ADMIN_USER=a
-            - ADMIN_PASSWORD=a
+            - ADMIN_USER=admin
+            - ADMIN_PASSWORD=password
             - IPWHITELIST=*
             - TRANSCODER=enabled #enabled | disabled | remove to not change
             - LOG_LEVEL=WARN #DEBUG INFO WARN ERROR
@@ -36,7 +36,7 @@ services:
             - REPORT_LANGUAGE=en
             - LOG_LEVEL=INFO
             - MIN_CHUNK_SIZE=1
-            - SOURCE_STREAM=rtmp://wse.docker/live/myStream_160p
+            # - SOURCE_STREAM=rtmp://wse.docker/live/myStream_160p
         ports:
             - 3000:3000
         volumes:
@@ -49,9 +49,3 @@ services:
             - LOG_LEVEL=WARN #DEBUG INFO WARN ERROR
         ports:
             - 8088:8080
-        volumes:
-            - ~/Downloads:/downloads
-
-
-
-
