@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+##
+## This code and all components (c) Copyright 2006 - 2025, Wowza Media Systems, LLC. All rights reserved.
+## This code is licensed pursuant to the Wowza Public License version 1.0, available at www.wowza.com/legal.
+##
 import sys
 import numpy as np
 import librosa
@@ -11,16 +15,17 @@ import soundfile as sf
 import math
 
 logger = logging.getLogger(__name__)
+SAMPLING_RATE = 16000 #default
 
 @lru_cache(10**6)
 def load_audio(fname):
-    a, _ = librosa.load(fname, sr=16000, dtype=np.float32)
+    a, _ = librosa.load(fname, sr=SAMPLING_RATE, dtype=np.float32)
     return a
 
 def load_audio_chunk(fname, beg, end):
     audio = load_audio(fname)
-    beg_s = int(beg*16000)
-    end_s = int(end*16000)
+    beg_s = int(beg*SAMPLING_RATE)
+    end_s = int(end*SAMPLING_RATE)
     return audio[beg_s:end_s]
 
 
@@ -103,28 +108,29 @@ class FasterWhisperASR(ASRBase):
 
     sep = ""
 
-    def load_model(self, modelsize=None, cache_dir=None, model_dir=None):
+    def load_model(self, model_size=None, cache_dir=None, model_dir=None):
         from faster_whisper import WhisperModel
 #        logging.getLogger("faster_whisper").setLevel(logger.level)
+
         if model_dir is not None:
-            logger.debug(f"Loading whisper model from model_dir {model_dir}. modelsize and cache_dir parameters are not used.")
+            logger.debug(f"Loading whisper model from model_dir {model_dir}. model_size and cache_dir parameters are not used.")
             model_size_or_path = model_dir
-        elif modelsize is not None:
-            model_size_or_path = modelsize
+        elif model_size is not None:
+            model_size_or_path = model_size
         else:
-            raise ValueError("modelsize or model_dir parameter must be set")
+            raise ValueError("model_size or model_dir parameter must be set")
 
 
         # this worked fast and reliably on NVIDIA L40
-        model = WhisperModel(model_size_or_path, device="cuda", compute_type="float16", download_root=cache_dir)
+        # model = WhisperModel(model_size_or_path, device="cuda", compute_type="float16", download_root=cache_dir)
 
         # or run on GPU with INT8
         # tested: the transcripts were different, probably worse than with FP16, and it was slightly (appx 20%) slower
-        #model = WhisperModel(model_size, device="cuda", compute_type="int8_float16")
+        #model = WhisperModel(model_size_or_path, device="cuda", compute_type="int8_float16", download_root=cache_dir)
 
         # or run on CPU with INT8
         # tested: works, but slow, appx 10-times than cuda FP16
-#        model = WhisperModel(modelsize, device="cpu", compute_type="int8") #, download_root="faster-disk-cache-dir/")
+        model = WhisperModel(model_size_or_path, device="cpu", compute_type="int8", download_root=cache_dir)
         return model
 
     def transcribe(self, audio, init_prompt=""):
@@ -180,7 +186,7 @@ class MLXWhisper(ASRBase):
         """
         from mlx_whisper.transcribe import ModelHolder, transcribe
         import mlx.core as mx # Is installed with mlx-whisper
-        
+
         if model_dir is not None:
             logger.debug(f"Loading whisper model from model_dir {model_dir}. modelsize parameter is not used.")
             model_size_or_path = model_dir
@@ -319,10 +325,10 @@ class OpenaiApiASR(ASRBase):
         # Write the audio data to a buffer
         buffer = io.BytesIO()
         buffer.name = "temp.wav"
-        sf.write(buffer, audio_data, samplerate=16000, format='WAV', subtype='PCM_16')
+        sf.write(buffer, audio_data, samplerate=SAMPLING_RATE, format='WAV', subtype='PCM_16')
         buffer.seek(0)  # Reset buffer's position to the beginning
 
-        self.transcribed_seconds += math.ceil(len(audio_data)/16000)  # it rounds up to the whole seconds
+        self.transcribed_seconds += math.ceil(len(audio_data)/SAMPLING_RATE)  # it rounds up to the whole seconds
 
         params = {
             "model": self.modelname,
@@ -425,7 +431,7 @@ class HypothesisBuffer:
 
 class OnlineASRProcessor:
 
-    SAMPLING_RATE = 16000
+    #SAMPLING_RATE = 16000
 
     def __init__(self, asr, tokenizer=None, buffer_trimming=("segment", 15), logfile=sys.stderr):
         """asr: WhisperASR object
@@ -483,7 +489,7 @@ class OnlineASRProcessor:
         prompt, non_prompt = self.prompt()
         logger.debug(f"PROMPT: {prompt}")
         logger.debug(f"CONTEXT: {non_prompt}")
-        logger.debug(f"transcribing {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}")
+        logger.debug(f"transcribing {len(self.audio_buffer)/SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}")
         res = self.asr.transcribe(self.audio_buffer, init_prompt=prompt)
 
         # transform to [(beg,end,"word1"), ...]
@@ -500,7 +506,7 @@ class OnlineASRProcessor:
         # there is a newly confirmed text
 
         if o and self.buffer_trimming_way == "sentence":  # trim the completed sentences
-            if len(self.audio_buffer)/self.SAMPLING_RATE > self.buffer_trimming_sec:  # longer than this
+            if len(self.audio_buffer)/SAMPLING_RATE > self.buffer_trimming_sec:  # longer than this
                 self.chunk_completed_sentence()
 
         
@@ -509,11 +515,11 @@ class OnlineASRProcessor:
         else:
             s = 30 # if the audio buffer is longer than 30s, trim it
         
-        if len(self.audio_buffer)/self.SAMPLING_RATE > s:
+        if len(self.audio_buffer)/SAMPLING_RATE > s:
             self.chunk_completed_segment(res)
 
             # alternative: on any word
-            #l = self.buffer_time_offset + len(self.audio_buffer)/self.SAMPLING_RATE - 10
+            #l = self.buffer_time_offset + len(self.audio_buffer)/SAMPLING_RATE - 10
             # let's find commited word that is less
             #k = len(self.commited)-1
             #while k>0 and self.commited[k][1] > l:
@@ -522,7 +528,7 @@ class OnlineASRProcessor:
             logger.debug("chunking segment")
             #self.chunk_at(t)
 
-        logger.debug(f"len of buffer now: {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f}")
+        logger.debug(f"len of buffer now: {len(self.audio_buffer)/SAMPLING_RATE:2.2f}")
         return self.to_flush(o)
 
     def chunk_completed_sentence(self):
@@ -571,7 +577,7 @@ class OnlineASRProcessor:
         """
         self.transcript_buffer.pop_commited(time)
         cut_seconds = time - self.buffer_time_offset
-        self.audio_buffer = self.audio_buffer[int(cut_seconds*self.SAMPLING_RATE):]
+        self.audio_buffer = self.audio_buffer[int(cut_seconds*SAMPLING_RATE):]
         self.buffer_time_offset = time
 
     def words_to_sentences(self, words):
@@ -607,7 +613,7 @@ class OnlineASRProcessor:
         o = self.transcript_buffer.complete()
         f = self.to_flush(o)
         logger.debug(f"last, noncommited: {f}")
-        self.buffer_time_offset += len(self.audio_buffer)/16000
+        self.buffer_time_offset += len(self.audio_buffer)/SAMPLING_RATE
         return f
 
 
@@ -676,7 +682,7 @@ class VACOnlineASRProcessor(OnlineASRProcessor):
             if 'start' in res and 'end' not in res:
                 self.status = 'voice'
                 send_audio = self.audio_buffer[frame:]
-                self.online.init(offset=(frame+self.buffer_offset)/self.SAMPLING_RATE)
+                self.online.init(offset=(frame+self.buffer_offset)/SAMPLING_RATE)
                 self.online.insert_audio_chunk(send_audio)
                 self.current_online_chunk_buffer_size += len(send_audio)
                 self.clear_buffer()
@@ -692,7 +698,7 @@ class VACOnlineASRProcessor(OnlineASRProcessor):
                 end = res["end"]-self.buffer_offset
                 self.status = 'nonvoice'
                 send_audio = self.audio_buffer[beg:end]
-                self.online.init(offset=(beg+self.buffer_offset)/self.SAMPLING_RATE)
+                self.online.init(offset=(beg+self.buffer_offset)/SAMPLING_RATE)
                 self.online.insert_audio_chunk(send_audio)
                 self.current_online_chunk_buffer_size += len(send_audio)
                 self.is_currently_final = True
@@ -705,14 +711,14 @@ class VACOnlineASRProcessor(OnlineASRProcessor):
             else:
                 # We keep 1 second because VAD may later find start of voice in it.
                 # But we trim it to prevent OOM. 
-                self.buffer_offset += max(0,len(self.audio_buffer)-self.SAMPLING_RATE)
-                self.audio_buffer = self.audio_buffer[-self.SAMPLING_RATE:]
+                self.buffer_offset += max(0,len(self.audio_buffer)-SAMPLING_RATE)
+                self.audio_buffer = self.audio_buffer[-SAMPLING_RATE:]
 
 
     def process_iter(self):
         if self.is_currently_final:
             return self.finish()
-        elif self.current_online_chunk_buffer_size > self.SAMPLING_RATE*self.online_chunk_size:
+        elif self.current_online_chunk_buffer_size > SAMPLING_RATE*self.online_chunk_size:
             self.current_online_chunk_buffer_size = 0
             ret = self.online.process_iter()
             return ret
@@ -778,6 +784,7 @@ def add_shared_args(parser):
     parser.add_argument('--buffer_trimming', type=str, default="segment", choices=["sentence", "segment"],help='Buffer trimming strategy -- trim completed sentences marked with punctuation mark and detected by sentence segmenter, or the completed segments returned by Whisper. Sentence segmenter must be installed for "sentence" option.')
     parser.add_argument('--buffer_trimming_sec', type=float, default=15, help='Buffer trimming length threshold in seconds. If buffer length is longer, trimming sentence/segment is triggered.')
     parser.add_argument("-l", "--log-level", dest="log_level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help="Set the log level", default='DEBUG')
+    parser.add_argument("--sampling_rate", type=int, default=16000)
 
 def asr_factory(args, logfile=sys.stderr):
     """
@@ -785,7 +792,6 @@ def asr_factory(args, logfile=sys.stderr):
     """
     backend = args.backend
     if backend == "openai-api":
-        logger.debug("Using OpenAI API.")
         asr = OpenaiApiASR(lan=args.lan)
     else:
         if backend == "faster-whisper":
@@ -798,7 +804,7 @@ def asr_factory(args, logfile=sys.stderr):
         # Only for FasterWhisperASR and WhisperTimestampedASR
         size = args.model
         t = time.time()
-        logger.info(f"Loading Whisper {size} model for {args.lan}...")
+        logger.info(f"Loading Whisper {size} model for {args.lan} to {args.model_cache_dir}...")
         asr = asr_cls(modelsize=size, lan=args.lan, cache_dir=args.model_cache_dir, model_dir=args.model_dir)
         e = time.time()
         logger.info(f"done. It took {round(e-t,2)} seconds.")
@@ -866,7 +872,7 @@ if __name__ == "__main__":
 
     audio_path = args.audio_path
 
-    SAMPLING_RATE = 16000
+    SAMPLING_RATE = args.sampling_rate
     duration = len(load_audio(audio_path))/SAMPLING_RATE
     logger.info("Audio duration is: %2.2f seconds" % duration)
 
