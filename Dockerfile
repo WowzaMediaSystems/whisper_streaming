@@ -27,6 +27,7 @@ WORKDIR /app
 COPY *.py .
 COPY samples_jfk.wav .
 COPY entrypoint.sh .
+COPY LICENSE.txt .
 
 EXPOSE 3000
 
