@@ -201,6 +201,12 @@ class ServerProcessor:
                 except BrokenPipeError:
                     logger.info("broken pipe -- connection closed?")
                     break
+        #need to send what we have left
+        o = online.finish()
+        try:
+            self.send_result(o)
+        except BrokenPipeError:
+            logger.info("broken pipe -- connection closed?")
 
 def run_subprocess(command):
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
