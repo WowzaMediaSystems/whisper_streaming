@@ -30,6 +30,7 @@ It can also run in standalone mode and pull in an RTMP stream using ffmpeg
 |:---------|--------:|:-----------|
 |BACKEND   |faster-whisper| [faster-whisper,whisper_timestamped,openai-api] Load only this backend for Whisper processing.|
 |MODEL     |  tiny.en| [tiny.en,tiny,base.en,base,small.en,small,medium.en,medium,large-v1,large-v2,large-v3,large,large-v3-turbo] Name size of the Whisper model to use. The model is automatically downloaded from the model hub if not present in model cache dir. (/tmp)|
+|USE_GPU   | Flase | Use the GPU if available and installed |
 |LANGUAGE  |     auto| Source language code, e.g. en,de,cs, or 'auto' for language detection.|
 |LOG_LEVEL |     INFO| [DEBUG,INFO,WARNING,ERROR,CRITICAL] The level for logging|
 |SOURCE_STREAM | none| an RTMP url to pull a stream in.  Uses ffmpeg to capture audio and forwards the raw audio to the service |
@@ -49,10 +50,21 @@ The service returns a json object in the format to the websocket
 }
 ```
 
+### TEST
+
+```
+ffmpeg -hide_banner -loglevel error -f flv -i rtmp://localhost/live/myStream -c:a pcm_s16le -ac 1 -ar 16000 -f s16le - | nc localhost 3000
+```
+```
+ffmpeg -hide_banner -loglevel error -re -i <video_file.mp4> -c:a pcm_s16le -ac 1 -ar 16000 -f s16le - | nc localhost 3000
+```
 ### GPU
 
-This container and Whisper does support NVIDIA GPU for increased performance with larger models.  Run the docker container with `--gpus all`
- and `-e FP16=true` along with adding `torch` and `triton` python libraries in the Dockerfile.
+This container and Whisper does support NVIDIA GPU for increased performance with larger models:  
+1. Install `torch` and `triton` python libraries in the Dockerfile.
+2. Install `cudnn9-cuda-12` package in the Dockerfile.
+3. Run the docker container with `--gpus all`
+4. Run the docker container with environment variables `-e USE_GPU=True` and `-e FP16=true`
 
 ## Acknowledgments
 

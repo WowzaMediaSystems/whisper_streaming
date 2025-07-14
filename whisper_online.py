@@ -36,7 +36,7 @@ class ASRBase:
     sep = " "   # join transcribe words with this character (" " for whisper_timestamped,
                 # "" for faster-whisper because it emits the spaces when neeeded)
 
-    def __init__(self, lan, modelsize=None, cache_dir=None, model_dir=None, logfile=sys.stderr):
+    def __init__(self, lan, modelsize=None, cache_dir=None, model_dir=None, logfile=sys.stderr, use_gpu=False):
         self.logfile = logfile
 
         self.transcribe_kargs = {}
@@ -45,10 +45,10 @@ class ASRBase:
         else:
             self.original_language = lan
 
-        self.model = self.load_model(modelsize, cache_dir, model_dir)
+        self.model = self.load_model(modelsize, cache_dir, model_dir, use_gpu)
 
 
-    def load_model(self, modelsize, cache_dir):
+    def load_model(self, modelsize, cache_dir, use_gpu):
         raise NotImplemented("must be implemented in the child class")
 
     def transcribe(self, audio, init_prompt=""):
@@ -65,7 +65,7 @@ class WhisperTimestampedASR(ASRBase):
 
     sep = " "
 
-    def load_model(self, modelsize=None, cache_dir=None, model_dir=None):
+    def load_model(self, modelsize=None, cache_dir=None, model_dir=None, use_gpu=False):
         import whisper
         import whisper_timestamped
         from whisper_timestamped import transcribe_timestamped
@@ -108,7 +108,7 @@ class FasterWhisperASR(ASRBase):
 
     sep = ""
 
-    def load_model(self, model_size=None, cache_dir=None, model_dir=None):
+    def load_model(self, model_size=None, cache_dir=None, model_dir=None, use_gpu=False):
         from faster_whisper import WhisperModel
 #        logging.getLogger("faster_whisper").setLevel(logger.level)
 
@@ -120,17 +120,18 @@ class FasterWhisperASR(ASRBase):
         else:
             raise ValueError("model_size or model_dir parameter must be set")
 
+        if(use_gpu):
+            # this worked fast and reliably on NVIDIA L40
+            logger.info("Using GPU/CUDA")
+            model = WhisperModel(model_size_or_path, device="cuda", compute_type="float16", download_root=cache_dir)
 
-        # this worked fast and reliably on NVIDIA L40
-        # model = WhisperModel(model_size_or_path, device="cuda", compute_type="float16", download_root=cache_dir)
-
-        # or run on GPU with INT8
-        # tested: the transcripts were different, probably worse than with FP16, and it was slightly (appx 20%) slower
-        #model = WhisperModel(model_size_or_path, device="cuda", compute_type="int8_float16", download_root=cache_dir)
-
-        # or run on CPU with INT8
-        # tested: works, but slow, appx 10-times than cuda FP16
-        model = WhisperModel(model_size_or_path, device="cpu", compute_type="int8", download_root=cache_dir)
+            # or run on GPU with INT8
+            # tested: the transcripts were different, probably worse than with FP16, and it was slightly (appx 20%) slower
+            #model = WhisperModel(model_size_or_path, device="cuda", compute_type="int8_float16", download_root=cache_dir)
+        else:
+            # or run on CPU with INT8
+            # tested: works, but slow, appx 10-times than cuda FP16
+            model = WhisperModel(model_size_or_path, device="cpu", compute_type="int8", download_root=cache_dir)
         return model
 
     def transcribe(self, audio, init_prompt=""):
@@ -171,7 +172,7 @@ class MLXWhisper(ASRBase):
 
     sep = " "
 
-    def load_model(self, modelsize=None, cache_dir=None, model_dir=None):
+    def load_model(self, modelsize=None, cache_dir=None, model_dir=None, use_gpu=False):
         """
             Loads the MLX-compatible Whisper model.
 
@@ -785,6 +786,7 @@ def add_shared_args(parser):
     parser.add_argument('--buffer_trimming_sec', type=float, default=15, help='Buffer trimming length threshold in seconds. If buffer length is longer, trimming sentence/segment is triggered.')
     parser.add_argument("-l", "--log-level", dest="log_level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help="Set the log level", default='DEBUG')
     parser.add_argument("--sampling_rate", type=int, default=16000)
+    parser.add_argument("--use_gpu", type=lambda x: (str(x).lower() in ['true','1', 'yes']), default=False, help='Use the GPU')
 
 def asr_factory(args, logfile=sys.stderr):
     """
@@ -805,7 +807,7 @@ def asr_factory(args, logfile=sys.stderr):
         size = args.model
         t = time.time()
         logger.info(f"Loading Whisper {size} model for {args.lan} to {args.model_cache_dir}...")
-        asr = asr_cls(modelsize=size, lan=args.lan, cache_dir=args.model_cache_dir, model_dir=args.model_dir)
+        asr = asr_cls(modelsize=size, lan=args.lan, cache_dir=args.model_cache_dir, model_dir=args.model_dir, use_gpu=args.use_gpu)
         e = time.time()
         logger.info(f"done. It took {round(e-t,2)} seconds.")
 
