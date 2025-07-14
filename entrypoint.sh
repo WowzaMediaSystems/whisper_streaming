@@ -20,6 +20,8 @@ min_chunk_size="${MIN_CHUNK_SIZE:-1}"
 sampling_rate="${SAMPLING_RATE:-16000}"
 report_language="${REPORT_LANGUAGE:-none}"
 use_gpu="${USE_GPU:-False}"
+buffer_trimming="${BUFFER_TRIMMING:-segment}"
+buffer_trimming_sec="${BUFFER_TRIMMING_SEC:-15}"
 
 exec python whisper_online_server.py \
 --backend $backend \
@@ -28,6 +30,8 @@ exec python whisper_online_server.py \
 --report-language $report_language \
 --min-chunk-size $min_chunk_size \
 --sampling_rate $sampling_rate \
+--buffer_trimming $buffer_trimming \
+--buffer_trimming_sec $buffer_trimming_sec \
 --use_gpu $use_gpu \
 --port 3000 \
 --host 0.0.0.0 \
