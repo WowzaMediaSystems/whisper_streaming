@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+##
+## This code and all components (c) Copyright 2006 - 2025, Wowza Media Systems, LLC. All rights reserved.
+## This code is licensed pursuant to the Wowza Public License version 1.0, available at www.wowza.com/legal.
+##
+
 from whisper_online import *
 
 import sys
@@ -12,6 +17,8 @@ import threading
 import signal
 import datetime
 import json
+import http.client
+import re
 
 logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser()
@@ -21,8 +28,11 @@ parser.add_argument("--host", type=str, default='localhost')
 parser.add_argument("--port", type=int, default=3000)
 parser.add_argument("--warmup-file", type=str, dest="warmup_file", 
         help="The path to a speech audio wav file to warm up Whisper so that the very first chunk processing is fast. It can be e.g. https://github.com/ggerganov/whisper.cpp/raw/master/samples/jfk.wav .")
-parser.add_argument("--source-stream", type=str, default=None)
-parser.add_argument("--report-language", type=str, default=None)
+parser.add_argument("--source-stream", type=str, default=None, dest="source_stream")
+parser.add_argument("--report-languages", type=str, default='en', dest="report_languages")
+parser.add_argument("--source-language", type=str, default='en', dest="source_language")
+parser.add_argument("--libretranslate-host", type=str, default=None, dest="libretranslate_host")
+parser.add_argument("--libretranslate-port", type=int, default=5000, dest="libretranslate_port")
 
 # options from whisper_online
 add_shared_args(parser)
@@ -119,6 +129,10 @@ class ServerProcessor:
 
         self.is_first = True
 
+        #put english first as the may source to translate
+        self.report_languages = args.report_languages.split(',')
+        self.report_languages.insert(0, self.report_languages.pop(self.report_languages.index('en')))
+
     def receive_audio_chunk(self):
         global running
         # receive all audio that is available by this time
@@ -142,7 +156,7 @@ class ServerProcessor:
         self.is_first = False
         return np.concatenate(out)
 
-    def format_output_transcript(self,o):
+    def format_output_transcript(self,o, report_language):
         # This function differs from whisper_online.output_transcript in the following:
         # succeeding [beg,end] intervals are not overlapping because ELITR protocol (implemented in online-text-flow events) requires it.
         # Therefore, beg, is max of previous end and current beg outputed by Whisper.
@@ -156,25 +170,41 @@ class ServerProcessor:
             self.last_end = end
             beg_webvtt = self.timedelta_to_webvtt(str(datetime.timedelta(seconds=beg)))
             end_webvtt = self.timedelta_to_webvtt(str(datetime.timedelta(seconds=end)))
-            logger.info("%s -> %s %s" % (beg_webvtt, end_webvtt, o[2].strip()))
+            org_txt = o[2].strip()
 
             data = {}
-            if(report_language != None and report_language != 'none'):
-                data['language'] = "en"
+            data['language'] = report_language
             data['start'] = "%1.3f" % datetime.timedelta(seconds=beg).total_seconds()
             data['end'] = "%1.3f" % datetime.timedelta(seconds=end).total_seconds()
-            data['text'] = o[2].strip()
+            data['text'] = org_txt
 
             #return "%1.0f %1.0f %s" % (beg,end,o[2])
-            return json.dumps(data)
+            return data
         else:
             logger.debug("No text in this segment")
             return None
 
     def send_result(self, o):
-        msg = self.format_output_transcript(o)
+        msg = self.format_output_transcript(o, args.source_language)
         if msg is not None and (source_stream == None or source_stream == 'none'):
-            self.connection.send(msg)
+            logger.info("(%s) %s -> %s %s" % ( msg['language'],  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['start'])))) ,  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['end'])))), msg['text']))
+            self.connection.send(json.dumps(msg))
+
+            if(args.libretranslate_host != None and args.libretranslate_host != 'none'):
+                org_txt = msg['text']
+                source_language = args.source_language
+
+                for report_language in self.report_languages:
+                    if(report_language != args.source_language):
+                        msg['language'] = report_language
+                        msg['text'] = self.translate_text(org_txt, source_language, msg['language'])
+                        self.connection.send(json.dumps(msg))
+                        if(report_language == 'en'):
+                            #switch to translationt to english, for non-english to non-english, going to english works 
+                            source_language = 'en'
+                            msg['text'] = self.remove_non_english_chars(msg['text'])
+                            org_txt = msg['text']
+                        logger.info("(%s) %s -> %s %s" % ( msg['language'],  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['start'])))) ,  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['end'])))), msg['text']))
 
     def process(self):
         global running
@@ -208,6 +238,46 @@ class ServerProcessor:
         except BrokenPipeError:
             logger.info("broken pipe -- connection closed?")
 
+    def translate_text(self, org_txt, source_language, dst_language):
+        new_txt = "???"
+        try:
+            # docker run -ti --rm -p 5001:5000 -v ~/libretranslate_models:/home/libretranslate/.local -e LT_LOAD_ONLY=en,jp libretranslate/libretranslate:latest
+            # curl -X POST http://localhost:5001/translate -H "Content-Type:application/json" -d '{"q":"Hello!","source":"en","target":"es"}'
+            js = {
+                'q': org_txt,
+                'source': source_language,
+                'target': dst_language
+            }
+            json_data = json.dumps(js).encode('utf-8')
+            headers = { 'Content-type': 'application/json' }
+
+            connection = http.client.HTTPConnection(args.libretranslate_host, args.libretranslate_port, timeout=10)
+            connection.request("POST", "/translate", json_data, headers)
+
+            response = connection.getresponse()
+            if(response.status == 200 or response.status == 201):
+                json_string = response.read().decode('utf-8')
+                objects = json.loads(json_string)
+                new_txt = objects.get('translatedText')
+            else:
+                logger.error("Error:" + str(response.status))
+                logger.error(response.read().decode('utf-8'))
+
+        except Exception as e:
+            logger.error("opencv_api:" + str(e))
+        return new_txt
+
+    def remove_non_english_chars(self, text):
+        # This regex pattern matches characters that are NOT:
+        # a-z (lowercase English letters)
+        # A-Z (uppercase English letters)
+        # 0-9 (digits)
+        # common punctuation and whitespace (.,!?;:()[]{}'" -)
+        # You can customize this pattern to include or exclude specific characters
+        pattern = r'[^a-zA-Z0-9 .,!?;:()\[\]{}\'" -]'
+        cleaned_text = re.sub(pattern, '', text)
+        return cleaned_text
+
 def run_subprocess(command):
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
@@ -228,7 +298,7 @@ def stop(self, signum=None, frame=None):
 # source_stream = "rtmp://wse.docker/live/myStream_160p"
 #command = "ffmpeg -hide_banner -loglevel error -f flv -i rtmp://host.docker.internal/live/myStream_aac -c:a pcm_s16le -ac 1 -ar 16000 -f s16le - | nc -q 1 localhost 3000"
 #command = "ffmpeg -hide_banner -loglevel error -f flv -i rtmp://d93ab27c23fd-qa.entrypoint.cloud.wowza.com/app-Qp8R494H/259c678c_stream7 -c:a pcm_s16le -ac 1 -ar 16000 -f s16le - | nc -q 1 localhost 3000"
-report_language = args.report_language
+
 source_stream = args.source_stream
 if source_stream != None and source_stream != 'none':
     command = "ffmpeg -hide_banner -loglevel error -f flv -i " + source_stream + " -vn -c:a pcm_s16le -ac 1 -ar " + str(SAMPLING_RATE) + " -f s16le - | nc -q 1 localhost 3000"

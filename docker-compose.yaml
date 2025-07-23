@@ -2,49 +2,32 @@
 ## This code and all components (c) Copyright 2006 - 2025, Wowza Media Systems, LLC. All rights reserved.
 ## This code is licensed pursuant to the Wowza Public License version 1.0, available at www.wowza.com/legal.
 ##
-name: Wowza Streaming Engine Trial
+name: Whisper Streaming 
 services:
-    trial:
-        hostname: wse.docker
-        image: wowza/wowza-streaming-engine:latest-trial
-        environment:
-            - WSE_LICENSE_KEY=$WSE_LICENSE_KEY
-            - ADMIN_USER=admin
-            - ADMIN_PASSWORD=password
-            - IPWHITELIST=*
-            - TRANSCODER=enabled #enabled | disabled | remove to not change
-            - LOG_LEVEL=WARN #DEBUG INFO WARN ERROR
-            - SIMU_LIVE=disabled
-        #to persist the configurations between starts of Wowza Streaming Engine, uncomment the lines below:
-        # volumes:
-        #  - ./wse/applications:/usr/local/WowzaStreamingEngine/applications
-        #  - ./wse/conf:/usr/local/WowzaStreamingEngine/conf
-        #  - ./wse/content:/usr/local/WowzaStreamingEngine/content
-        #  - ./wse/transcoder:/usr/local/WowzaStreamingEngine/transcoder
-        ports:
-            - 8087:8087
-            - 80:80
-            - 443:443
-            - 1935:1935
     whisper_server:
         hostname: whisper.server
-        image: whisper_streaming:local
-        platform: linux/arm64
+        image: whisper_streaming:latest
+        build:
+            context: .
         environment:
-            - MODEL=tiny.en # tiny.en, base.en, small.en, medium.en, large-v3
-            - REPORT_LANGUAGE=en
+            - MODEL=tiny # tiny.en, base.en, small.en, medium.en, large-v3
             - LOG_LEVEL=INFO
             - MIN_CHUNK_SIZE=1
-            # - SOURCE_STREAM=rtmp://wse.docker/live/myStream_160p
+            - SOURCE_LANGUAGE=en
+            - REPORT_LANGUAGES=en,es,ja
+            - LIBRETRANSLATE_HOST=libretranslate.server
+            - LIBRETRANSLATE_PORT=5000
         ports:
             - 3000:3000
         volumes:
             - ./model_cache:/tmp
 
-    manager:
-        hostname: wsem.docker
-        image: wowza/wowza-streaming-engine-manager:latest
+    libretranslate_server:
+        hostname: libretranslate.server
+        image: libretranslate/libretranslate:latest
         environment:
-            - LOG_LEVEL=WARN #DEBUG INFO WARN ERROR
+            - LT_LOAD_ONLY=en,es,ja
         ports:
-            - 8088:8080
+            - 5001:5000
+        volumes:
+            - ./libretranslate_models:/home/libretranslate/.local

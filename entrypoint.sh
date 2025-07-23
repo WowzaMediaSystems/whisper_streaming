@@ -18,20 +18,26 @@ log_level="${LOG_LEVEL:-INFO}"
 source_stream="${SOURCE_STREAM:-none}"
 min_chunk_size="${MIN_CHUNK_SIZE:-1}"
 sampling_rate="${SAMPLING_RATE:-16000}"
-report_language="${REPORT_LANGUAGE:-none}"
+report_languages="${REPORT_LANGUAGES:-en}"
+source_language="${SOURCE_LANGUAGE:-en}"
 use_gpu="${USE_GPU:-False}"
 buffer_trimming="${BUFFER_TRIMMING:-segment}"
 buffer_trimming_sec="${BUFFER_TRIMMING_SEC:-15}"
+libretranslate_host="${LIBRETRANSLATE_HOST:-none}"
+libretranslate_port="${LIBRETRANSLATE_PORT:-5000}"
 
 exec python whisper_online_server.py \
 --backend $backend \
 --model $model \
 --source-stream $source_stream \
---report-language $report_language \
+--report-languages $report_languages \
+--source-language $source_language \
 --min-chunk-size $min_chunk_size \
 --sampling_rate $sampling_rate \
 --buffer_trimming $buffer_trimming \
 --buffer_trimming_sec $buffer_trimming_sec \
+--libretranslate-host $libretranslate_host \
+--libretranslate-port $libretranslate_port \
 --use_gpu $use_gpu \
 --port 3000 \
 --host 0.0.0.0 \
