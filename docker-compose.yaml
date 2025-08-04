@@ -7,6 +7,14 @@ services:
     whisper_server:
         hostname: whisper.server
         image: whisper_streaming:latest
+        # runtime: nvidia
+        # deploy:
+        #   resources:
+        #     reservations:
+        #       devices:
+        #         - driver: nvidia
+        #           capabilities: [gpu]
+        #           count: 1        
         build:
             context: .
         environment:
