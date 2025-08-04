@@ -13,7 +13,7 @@ RUN pip install --no-deps openai-whisper
 RUN pip install numba numpy tqdm more-itertools tiktoken
 
 # Install these for GPU, increases image size by ~5GB
-# RUN pip install torch 
+# RUN pip install torch
 
 # RUN pip install "triton>=2.0.0; platform_machine=='arm64' and (sys_platform=='linux' or sys_platform=='linux2')"
 # RUN pip install "triton>=2.0.0; platform_machine=='x86_64' and (sys_platform=='linux' or sys_platform=='linux2')"
@@ -23,12 +23,19 @@ RUN pip install numba numpy tqdm more-itertools tiktoken
 
 # RUN dpkg -i cuda-keyring_1.1-1_all.deb
 # RUN apt update && apt install cudnn9-cuda-12 -y
-# ARM ?
 # RUN apt install libcublas-12-6 -y
 
 RUN pip install librosa soundfile
 RUN pip install faster-whisper
 RUN pip install hf_xet
+
+# include custom build of CTranslare if needed
+# COPY *.whl .
+# RUN pip install ctranslate2-4.6.0-cp312-cp312-linux_aarch64.whl --force-reinstall
+
+# COPY libct* /CTranslate/lib/libctranslate2.so.4
+# ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/CTranslate/lib
+# RUN pip install --upgrade numpy==1.26.4
 
 # create a working directory
 RUN mkdir /app
