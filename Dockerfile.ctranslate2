@@ -38,7 +38,7 @@ RUN cmake .. \
              -DWITH_CUDNN=ON \
              -DWITH_DNNL=OFF \
              -DWITH_MKL=OFF \
-             -DWITH_OPENBLAS=OFF \
+             -DWITH_OPENBLAS=ON \
              -DWITH_TESTS=ON ; exit 0
 
 # Running it a second time works? 
@@ -56,7 +56,7 @@ RUN cmake .. \
              -DWITH_CUDNN=ON \
              -DWITH_DNNL=OFF \
              -DWITH_MKL=OFF \
-             -DWITH_OPENBLAS=OFF \
+             -DWITH_OPENBLAS=ON \
              -DWITH_TESTS=ON 
 
 RUN make -j4
