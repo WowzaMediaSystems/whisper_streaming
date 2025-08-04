@@ -1,0 +1,77 @@
+##
+## This code and all components (c) Copyright 2006 - 2025, Wowza Media Systems, LLC. All rights reserved.
+## This code is licensed pursuant to the Wowza Public License version 1.0, available at www.wowza.com/legal.
+##
+
+# Docker container to build CTranslate2 with CUDU support
+
+#FROM python:3.12-bookworm
+FROM nvcr.io/nvidia/pytorch:24.12-py3
+
+# REBUILD CTranslate2 w/cuda support on ARM
+WORKDIR /
+RUN git clone --recursive https://github.com/OpenNMT/CTranslate2.git
+
+WORKDIR /CTranslate2
+RUN mkdir build
+
+ENV CTRANSLATE2_ROOT=/CTranslate2
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CTRANSLATE2_ROOT/lib
+ENV CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda
+ENV CUDA_INCLUDE_DIRS=/usr/local/cuda/include
+ENV CUDA_INC_PATH=$CUDA_INCLUDE_DIRS
+ENV CUDA_PATH=/usr/local/cuda
+ENV CUDA_INSTALL_PATH=/usr/local/cuda
+
+WORKDIR /CTranslate2/build
+RUN cmake .. \
+             -DCMAKE_SYSTEM_NAME=Linux \
+             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+             -DCMAKE_FIND_ROOT_PATH=/usr/aarch64-linux-gnu \
+             -DOPENMP_RUNTIME=COMP \
+             -DCMAKE_INSTALL_PREFIX=${CTRANSLATE2_ROOT} \
+             -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
+             -DCUDA_INCLUDE_DIRS=/usr/local/cuda/include \
+             -DWITH_CUDA=ON \
+             -DWITH_CUDNN=ON \
+             -DWITH_DNNL=OFF \
+             -DWITH_MKL=OFF \
+             -DWITH_OPENBLAS=OFF \
+             -DWITH_TESTS=ON ; exit 0
+
+# Running it a second time works? 
+RUN cmake .. \
+             -DCMAKE_SYSTEM_NAME=Linux \
+             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+             -DCMAKE_FIND_ROOT_PATH=/usr/aarch64-linux-gnu \
+             -DOPENMP_RUNTIME=COMP \
+             -DCMAKE_INSTALL_PREFIX=${CTRANSLATE2_ROOT} \
+             -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
+             -DCUDA_INCLUDE_DIRS=/usr/local/cuda/include \
+             -DWITH_CUDA=ON \
+             -DWITH_CUDNN=ON \
+             -DWITH_DNNL=OFF \
+             -DWITH_MKL=OFF \
+             -DWITH_OPENBLAS=OFF \
+             -DWITH_TESTS=ON 
+
+RUN make -j4
+RUN make install
+RUN ldconfig
+
+# make the whl file
+WORKDIR /CTranslate2/python
+
+RUN pip install -r install_requirements.txt
+RUN python setup.py bdist_wheel --dist-dir $CTRANSLATE2_ROOT
+
+# make simple script to get neede file to /tmp
+RUN echo "cp $CTRANSLATE2_ROOT/ctranslate2-4.6.0-cp312-cp312-linux_aarch64.whl /tmp && cp $CTRANSLATE2_ROOT/lib/lib* /tmp" >> $CTRANSLATE2_ROOT/cp.sh
+RUN chmod 744 $CTRANSLATE2_ROOT/cp.sh
+
+CMD ["/CTranslate2/cp.sh"]
+
