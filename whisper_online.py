@@ -839,14 +839,10 @@ def asr_factory(args, logfile=sys.stderr):
     return asr, online
 
 def set_logging(args,logger,other="_server"):
-    logging.basicConfig(#format='%(name)s 
-            format='%(asctime)s\t%(levelname)s\t%(message)s')
-    logger.setLevel(args.log_level)
+    logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s')
     logging.getLogger("whisper_online"+other).setLevel(args.log_level)
-#    logging.getLogger("whisper_online_server").setLevel(args.log_level)
-
-
-
+    logger.setLevel(args.log_level)
+    
 if __name__ == "__main__":
 
     import argparse
