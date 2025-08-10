@@ -228,15 +228,16 @@ class ServerProcessor:
                 o = online.process_iter()
                 try:
                     self.send_result(o)
-                except BrokenPipeError:
-                    logger.info("broken pipe -- connection closed?")
+                except Exception as e:
+                    logger.error("Socker Error:"+str(e))
                     break
         #need to send what we have left
         o = online.finish()
         try:
             self.send_result(o)
-        except BrokenPipeError:
-            logger.info("broken pipe -- connection closed?")
+        except Exception as e:
+            logger.error("Socker Error:"+str(e))
+        logger.info("Socker thread ending")
 
     def translate_text(self, org_txt, source_language, dst_language):
         new_txt = "???"
@@ -287,7 +288,7 @@ def worker_thread(command):
     global running    
     while running:
         stdout, stderr, returncode = run_subprocess(command)
-        logger.debug(f"Return Code: {returncode}")
+        logger.info(f"Return Code: {returncode}")
         time.sleep(1.0)
 
 def stop(self, signum=None, frame=None):
@@ -318,18 +319,27 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     server_socket = s
     s.bind((args.host, args.port))
     s.listen(1)
+    # s.settimeout(60)
     logger.info('Listening on'+str((args.host, args.port)))
     while running:
         try:
+            addr = None
+            conn = None
+            logger.info('Waiting for connection')
             conn, addr = s.accept()
-            logger.debug('Connected to client on {}'.format(addr))
+            logger.info('Connected to client on {}'.format(addr))
+            conn.settimeout(15)
             connection = Connection(conn)
             proc = ServerProcessor(connection, online, args.min_chunk_size)
             proc.process()
-            conn.close()
         except socket.error as e:
-          break # Exit the loop on socket errors            
-        logger.debug('Connection to client closed{}'.format(addr))
+            logger.error("Socker error:"+str(e))
+            #break # Exit the loop on socket errors
+        except Exception as e:
+            logger.error("Error:"+str(e))
+        if(conn is not None):
+            conn.close()
+        logger.info('Connection to client closed{}'.format(addr))
 
 logger.info('Server Stopped')
 running=False

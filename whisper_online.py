@@ -123,6 +123,8 @@ class FasterWhisperASR(ASRBase):
         if(use_gpu):
             # this worked fast and reliably on NVIDIA L40
             logger.info("Using GPU/CUDA")
+            logger.info("Using translation server:"+args.libretranslate_host)
+
             model = WhisperModel(model_size_or_path, device="cuda", compute_type="float16", download_root=cache_dir)
 
             # or run on GPU with INT8
@@ -842,7 +844,7 @@ def set_logging(args,logger,other="_server"):
     logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s')
     logging.getLogger("whisper_online"+other).setLevel(args.log_level)
     logger.setLevel(args.log_level)
-    
+
 if __name__ == "__main__":
 
     import argparse

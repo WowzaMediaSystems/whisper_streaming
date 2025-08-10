@@ -7,37 +7,39 @@ services:
     whisper_server:
         hostname: whisper.server
         image: whisper_streaming:latest
-        # runtime: nvidia
-        # deploy:
-        #   resources:
-        #     reservations:
-        #       devices:
-        #         - driver: nvidia
-        #           capabilities: [gpu]
-        #           count: 1
+        runtime: nvidia
+        deploy:
+          resources:
+            reservations:
+              devices:
+                - driver: nvidia
+                  capabilities: [gpu]
+                  count: 1
         build:
             context: .
+            dockerfile: Dockerfile.jetson
         environment:
             - MODEL=tiny # tiny.en, base.en, small.en, medium.en, large-v3
             - LOG_LEVEL=INFO
             - MIN_CHUNK_SIZE=1
             - SOURCE_LANGUAGE=en
-            - REPORT_LANGUAGES=en,es,ja
+            - REPORT_LANGUAGES=en,fr,es,de,ja
             - LIBRETRANSLATE_HOST=libretranslate.server
             - LIBRETRANSLATE_PORT=5000
-            # - USE_GPU=True
-            # - FP16=true
+            - MODEL=large-v3-turbo
+            - USE_GPU=True
+            - FP16=true
         ports:
             - 3000:3000
         volumes:
-            - ./model_cache:/tmp
+            - ../model_cache:/tmp
 
     libretranslate_server:
         hostname: libretranslate.server
         image: libretranslate/libretranslate:latest
         environment:
-            - LT_LOAD_ONLY=en,es,ja
+            - LT_LOAD_ONLY=en,fr,es,de,ja
         ports:
             - 5001:5000
         volumes:
-            - ./libretranslate_models:/home/libretranslate/.local
+            - ../libretranslate_models:/home/libretranslate/.local
