@@ -214,15 +214,14 @@ class ServerProcessor:
                 try:
                     self.send_result(o, id)
                 except Exception as e:
-                    logger.error(f"{id}) Socker Error:"+str(e))
+                    logger.error(f"{id}) Socket Error:"+str(e))
                     break
         #need to send what we have left
         o = self.online_asr_proc.finish()
         try:
             self.send_result(o, id)
         except Exception as e:
-            logger.error(f"{id}) Socker Error:"+str(e))
-        logger.info(f"{id}) Socker thread ending")
+            logger.error(f"{id}) Socket Error:"+str(e))
 
     def translate_text(self, id, org_txt, source_language, dst_language):
         new_txt = "???"
@@ -295,18 +294,16 @@ if source_stream != None and source_stream != 'none':
 
 def socket_thread(conn, asr, online_asr_proc, addr, id):
     try:
-        # online = OnlineASRProcessor(asr, None,logfile=sys.stderr,buffer_trimming=(args.buffer_trimming, args.buffer_trimming_sec))
-        # online = online_asr_proc
         connection = Connection(conn)
         conn.settimeout(15)
         proc = ServerProcessor(connection, online_asr_proc, args.min_chunk_size)
         proc.process(id)
     except Exception as e:
         logger.error(f"{id}) Error:"+str(e))
-    logger.info(f"{id}) Ending socket thread")
     if(conn is not None):
         conn.close()
-    logger.info(f"{id}) Connection to client closed{format(addr)}")
+    logger.info(f"{id}) Client connection closed {format(addr)}")
+    logger.info(f"{id}) Ending socket thread")
 
 # server loop
 
@@ -335,7 +332,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((args.host, args.port))
     s.listen(1)
     id = 0
-    logger.info("Using translation server:"+args.libretranslate_host)    
+    logger.info("Using translation server: "+args.libretranslate_host)    
     logger.info('Listening on'+str((args.host, args.port)))
     while running:
         try:
@@ -345,7 +342,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             logger.info('Waiting for new connection')
             conn, addr = s.accept()
             id = id + 1
-            logger.info(f"{id}) Connected to client on {format(addr)}")
+            logger.info(f"{id}) Connected on {format(addr)}")
             thread = threading.Thread(target=socket_thread, args=(conn, asr, online, addr, id))
             thread.start()
 
