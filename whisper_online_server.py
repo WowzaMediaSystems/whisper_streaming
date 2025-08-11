@@ -46,22 +46,7 @@ running=True
 SAMPLING_RATE = args.sampling_rate
 size = args.model
 language = args.lan
-asr, online = asr_factory(args)
 min_chunk = args.min_chunk_size
-
-# warm up the ASR because the very first transcribe takes more time than the others. 
-# Test results in https://github.com/ufal/whisper_streaming/pull/81
-msg = "Whisper is not warmed up. The first chunk processing may take longer."
-if args.warmup_file:
-    if os.path.isfile(args.warmup_file):
-        a = load_audio_chunk(args.warmup_file,0,1)
-        asr.transcribe(a)
-        logger.info("Whisper is warmed up.")
-    else:
-        logger.critical("The warm up file is not available. "+msg)
-        sys.exit(1)
-else:
-    logger.warning(msg)
 
 
 ######### Server objects
@@ -184,10 +169,10 @@ class ServerProcessor:
             logger.debug("No text in this segment")
             return None
 
-    def send_result(self, o):
+    def send_result(self, o, id):
         msg = self.format_output_transcript(o, args.source_language)
         if msg is not None and (source_stream == None or source_stream == 'none'):
-            logger.info("(%s) %s -> %s %s" % ( msg['language'],  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['start'])))) ,  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['end'])))), msg['text']))
+            logger.info("%i) (%s) %s -> %s %s" % ( id, msg['language'], self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['start'])))) ,  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['end'])))), msg['text']))
             self.connection.send(json.dumps(msg))
 
             if(args.libretranslate_host != None and args.libretranslate_host != 'none'):
@@ -197,16 +182,16 @@ class ServerProcessor:
                 for report_language in self.report_languages:
                     if(report_language != args.source_language):
                         msg['language'] = report_language
-                        msg['text'] = self.translate_text(org_txt, source_language, msg['language'])
+                        msg['text'] = self.translate_text(id, org_txt, source_language, msg['language'])
                         self.connection.send(json.dumps(msg))
                         if(report_language == 'en'):
                             #switch to translationt to english, for non-english to non-english, going to english works 
                             source_language = 'en'
                             msg['text'] = self.remove_non_english_chars(msg['text'])
                             org_txt = msg['text']
-                        logger.info("(%s) %s -> %s %s" % ( msg['language'],  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['start'])))) ,  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['end'])))), msg['text']))
+                        logger.info("%i) (%s) %s -> %s %s" % ( id, msg['language'],  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['start'])))) ,  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['end'])))), msg['text']))
 
-    def process(self):
+    def process(self, id):
         global running
         # handle one client connection
         self.online_asr_proc.init()
@@ -215,31 +200,31 @@ class ServerProcessor:
             a = self.receive_audio_chunk()
             if a is None:
                 if first_time:
-                    logger.debug("No audio, exiting")
+                    logger.debug(f"{id}) No audio, exiting")
                 else:
-                    logger.info("No audio, exiting")
+                    logger.info(f"{id}) No audio, exiting")
                 break
             else:
                 if first_time:
                     first_time = False
-                    logger.info("Receiving Audio")
+                    logger.info(f"{id}) Receiving Audio")
                 
                 self.online_asr_proc.insert_audio_chunk(a)
-                o = online.process_iter()
+                o = self.online_asr_proc.process_iter()
                 try:
-                    self.send_result(o)
+                    self.send_result(o, id)
                 except Exception as e:
-                    logger.error("Socker Error:"+str(e))
+                    logger.error(f"{id}) Socker Error:"+str(e))
                     break
         #need to send what we have left
-        o = online.finish()
+        o = self.online_asr_proc.finish()
         try:
-            self.send_result(o)
+            self.send_result(o, id)
         except Exception as e:
-            logger.error("Socker Error:"+str(e))
-        logger.info("Socker thread ending")
+            logger.error(f"{id}) Socker Error:"+str(e))
+        logger.info(f"{id}) Socker thread ending")
 
-    def translate_text(self, org_txt, source_language, dst_language):
+    def translate_text(self, id, org_txt, source_language, dst_language):
         new_txt = "???"
         try:
             # docker run -ti --rm -p 5001:5000 -v ~/libretranslate_models:/home/libretranslate/.local -e LT_LOAD_ONLY=en,jp libretranslate/libretranslate:latest
@@ -261,11 +246,11 @@ class ServerProcessor:
                 objects = json.loads(json_string)
                 new_txt = objects.get('translatedText')
             else:
-                logger.error("Error:" + str(response.status))
-                logger.error(response.read().decode('utf-8'))
+                logger.error(f"{id}) Error:" + str(response.status))
+                logger.error(f"{id}) {response.read().decode('utf-8')}")
 
         except Exception as e:
-            logger.error("opencv_api:" + str(e))
+            logger.error(f"{id}) opencv_api:" + str(e))
         return new_txt
 
     def remove_non_english_chars(self, text):
@@ -308,6 +293,20 @@ if source_stream != None and source_stream != 'none':
     thread = threading.Thread(target=worker_thread, args=(command,))
     thread.start()
 
+def socket_thread(conn, asr, online_asr_proc, addr, id):
+    try:
+        # online = OnlineASRProcessor(asr, None,logfile=sys.stderr,buffer_trimming=(args.buffer_trimming, args.buffer_trimming_sec))
+        # online = online_asr_proc
+        connection = Connection(conn)
+        conn.settimeout(15)
+        proc = ServerProcessor(connection, online_asr_proc, args.min_chunk_size)
+        proc.process(id)
+    except Exception as e:
+        logger.error(f"{id}) Error:"+str(e))
+    logger.info(f"{id}) Ending socket thread")
+    if(conn is not None):
+        conn.close()
+    logger.info(f"{id}) Connection to client closed{format(addr)}")
 
 # server loop
 
@@ -315,31 +314,62 @@ signal.signal(signal.SIGINT, stop)
 signal.signal(signal.SIGTERM, stop)
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    
+    asr, online = asr_factory(args)
+    # warm up the ASR because the very first transcribe takes more time than the others. 
+    # Test results in https://github.com/ufal/whisper_streaming/pull/81
+    msg = "Whisper is not warmed up. The first chunk processing may take longer."
+    if args.warmup_file:
+        if os.path.isfile(args.warmup_file):
+            a = load_audio_chunk(args.warmup_file,0,1)
+            asr.transcribe(a)
+            logger.info("Whisper is warmed up.")
+        else:
+            logger.critical("The warm up file is not available. "+msg)
+            sys.exit(1)
+    else:
+        logger.warning(msg) 
+           
     global server_socket
     server_socket = s
     s.bind((args.host, args.port))
     s.listen(1)
-    # s.settimeout(60)
+    id = 0
+    logger.info("Using translation server:"+args.libretranslate_host)    
     logger.info('Listening on'+str((args.host, args.port)))
     while running:
         try:
             addr = None
             conn = None
-            logger.info('Waiting for connection')
+
+            logger.info('Waiting for new connection')
             conn, addr = s.accept()
-            logger.info('Connected to client on {}'.format(addr))
-            conn.settimeout(15)
-            connection = Connection(conn)
-            proc = ServerProcessor(connection, online, args.min_chunk_size)
-            proc.process()
+            id = id + 1
+            logger.info(f"{id}) Connected to client on {format(addr)}")
+            thread = threading.Thread(target=socket_thread, args=(conn, asr, online, addr, id))
+            thread.start()
+
+            #create a new asr for the next request
+            asr, online = asr_factory(args)
+            # warm up the ASR because the very first transcribe takes more time than the others. 
+            # Test results in https://github.com/ufal/whisper_streaming/pull/81
+            msg = "Whisper is not warmed up. The first chunk processing may take longer."
+            if args.warmup_file:
+                if os.path.isfile(args.warmup_file):
+                    a = load_audio_chunk(args.warmup_file,0,1)
+                    asr.transcribe(a)
+                    logger.info("Whisper is warmed up.")
+                else:
+                    logger.critical("The warm up file is not available. "+msg)
+                    sys.exit(1)
+            else:
+                logger.warning(msg) 
+
         except socket.error as e:
-            logger.error("Socker error:"+str(e))
+            logger.error("f{id} Socket error:"+str(e))
             #break # Exit the loop on socket errors
         except Exception as e:
-            logger.error("Error:"+str(e))
-        if(conn is not None):
-            conn.close()
-        logger.info('Connection to client closed{}'.format(addr))
+            logger.error("f{id} Error:"+str(e))
 
 logger.info('Server Stopped')
 running=False
