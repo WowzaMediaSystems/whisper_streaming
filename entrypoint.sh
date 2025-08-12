@@ -23,8 +23,8 @@ source_language="${SOURCE_LANGUAGE:-en}"
 use_gpu="${USE_GPU:-False}"
 buffer_trimming="${BUFFER_TRIMMING:-segment}"
 buffer_trimming_sec="${BUFFER_TRIMMING_SEC:-15}"
-libretranslate_host="${LIBRETRANSLATE_HOST:-none}"
-libretranslate_port="${LIBRETRANSLATE_PORT:-5000}"
+translate_host="${TRANSLATE_HOST:-none}"
+translate_port="${TRANSLATE_PORT:-5000}"
 
 exec python whisper_online_server.py \
 --backend $backend \
@@ -36,8 +36,8 @@ exec python whisper_online_server.py \
 --sampling_rate $sampling_rate \
 --buffer_trimming $buffer_trimming \
 --buffer_trimming_sec $buffer_trimming_sec \
---libretranslate-host $libretranslate_host \
---libretranslate-port $libretranslate_port \
+--translate-host $translate_host \
+--translate-port $translate_port \
 --use_gpu $use_gpu \
 --port 3000 \
 --host 0.0.0.0 \

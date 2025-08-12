@@ -31,8 +31,8 @@ parser.add_argument("--warmup-file", type=str, dest="warmup_file",
 parser.add_argument("--source-stream", type=str, default=None, dest="source_stream")
 parser.add_argument("--report-languages", type=str, default='en', dest="report_languages")
 parser.add_argument("--source-language", type=str, default='en', dest="source_language")
-parser.add_argument("--libretranslate-host", type=str, default=None, dest="libretranslate_host")
-parser.add_argument("--libretranslate-port", type=int, default=5000, dest="libretranslate_port")
+parser.add_argument("--translate-host", type=str, default=None, dest="translate_host")
+parser.add_argument("--translate-port", type=int, default=5000, dest="translate_port")
 
 # options from whisper_online
 add_shared_args(parser)
@@ -175,7 +175,7 @@ class ServerProcessor:
             logger.info("%i) (%s) %s -> %s %s" % ( id, msg['language'], self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['start'])))) ,  self.timedelta_to_webvtt(str(datetime.timedelta(seconds=float(msg['end'])))), msg['text']))
             self.connection.send(json.dumps(msg))
 
-            if(args.libretranslate_host != None and args.libretranslate_host != 'none'):
+            if(args.translate_host != None and args.translate_host != 'none'):
                 org_txt = msg['text']
                 source_language = args.source_language
 
@@ -236,7 +236,7 @@ class ServerProcessor:
             json_data = json.dumps(js).encode('utf-8')
             headers = { 'Content-type': 'application/json' }
 
-            connection = http.client.HTTPConnection(args.libretranslate_host, args.libretranslate_port, timeout=10)
+            connection = http.client.HTTPConnection(args.translate_host, args.translate_port, timeout=10)
             connection.request("POST", "/translate", json_data, headers)
 
             response = connection.getresponse()
@@ -332,7 +332,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((args.host, args.port))
     s.listen(1)
     id = 0
-    logger.info("Using translation server: "+args.libretranslate_host)    
+    logger.info("Using translation server: "+args.translate_host)    
     logger.info('Listening on'+str((args.host, args.port)))
     while running:
         try:
