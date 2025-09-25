@@ -31,8 +31,8 @@ It can also run in standalone mode and pull in an RTMP stream using ffmpeg
 |SAMPLING_RATE | 16000| Sample rate of the Audio.  |
 |SOURCE_LANGUAGE  |   en| Language of audio recieved from WSE|
 |REPORT_LANGUAGES |   en| Languages to report back to WSE|
-|LIBRETRANSLATE_HOST | localhost| Host name of the Librestranslate service |
-|LIBRETRANSLATE_PORT| 5000 | Port of the Librestanslate service |
+|LIBRETRANSLATE_HOST | localhost| Host name of the LibreTranslate service |
+|LIBRETRANSLATE_PORT| 5000 | Port of the LibreTranslate service |
 ### JSON
 
 The service returns a json object in the format to the websocket
