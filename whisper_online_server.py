@@ -363,10 +363,10 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 logger.warning(msg) 
 
         except socket.error as e:
-            logger.error("f{id} Socket error:"+str(e))
+            logger.error(f"{id} Socket error:{str(e)}")
             #break # Exit the loop on socket errors
         except Exception as e:
-            logger.error("f{id} Error:"+str(e))
+            logger.error(f"{id} Error:{str(e)}")
 
 logger.info('Server Stopped')
 running=False
