@@ -114,7 +114,7 @@ class ServerProcessor:
 
         self.is_first = True
 
-        #put english first as the may source to translate
+        #put english first as the main source to translate
         self.report_languages = args.report_languages.split(',')
         self.report_languages.insert(0, self.report_languages.pop(self.report_languages.index('en')))
 
