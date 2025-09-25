@@ -185,7 +185,7 @@ class ServerProcessor:
                         msg['text'] = self.translate_text(id, org_txt, source_language, msg['language'])
                         self.connection.send(json.dumps(msg))
                         if(report_language == 'en'):
-                            #switch to translationt to english, for non-english to non-english, going to english works 
+                            #switch to translation to english, for non-english to non-english, going to english works 
                             source_language = 'en'
                             msg['text'] = self.remove_non_english_chars(msg['text'])
                             org_txt = msg['text']
