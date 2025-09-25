@@ -23,14 +23,6 @@ RUN pip install librosa soundfile
 RUN pip install faster-whisper
 RUN pip install hf_xet
 
-# include custom build of CTranslare if needed
-# COPY CTranslate2/*.whl .
-# RUN pip install ctranslate2-4.6.0-cp312-cp312-linux_aarch64.whl --force-reinstall
-
-# COPY CTranslate2/libct* /CTranslate2/lib/libctranslate2.so.4
-# ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/CTranslate2/lib
-# RUN pip install --upgrade numpy==1.26.4
-
 # create a working directory
 RUN mkdir /app
 WORKDIR /app
