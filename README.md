@@ -9,7 +9,7 @@ It can also run in standalone mode and pull in an RTMP stream using ffmpeg
 
 ##### Dockerfile
 
-> Dockerfile to build a phyton application using OpenAI Whisper that listens on a port that recieves raw audio and returns JSON for detected speach that gets integrate with the video feed as WebVTT or Embedded 608/708.  Will also make calls to a Libretranslate service to tranlate text detected into another language and report back
+> Dockerfile to build a python application using OpenAI Whisper that listens on a port that receives raw audio and returns JSON for detected speech that gets integrated with the video feed as WebVTT or Embedded 608/708.  Will also make calls to a Libretranslate service to translate text detected into another language and report back
 
 
 ##### docker-compose.yaml
