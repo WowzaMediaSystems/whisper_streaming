@@ -237,16 +237,19 @@ class ServerProcessor:
             headers = { 'Content-type': 'application/json' }
 
             connection = http.client.HTTPConnection(args.translate_host, args.translate_port, timeout=10)
-            connection.request("POST", "/translate", json_data, headers)
+            try:
+                connection.request("POST", "/translate", json_data, headers)
 
-            response = connection.getresponse()
-            if(response.status == 200 or response.status == 201):
-                json_string = response.read().decode('utf-8')
-                objects = json.loads(json_string)
-                new_txt = objects.get('translatedText')
-            else:
-                logger.error(f"{id}) Error:" + str(response.status))
-                logger.error(f"{id}) {response.read().decode('utf-8')}")
+                response = connection.getresponse()
+                if(response.status == 200 or response.status == 201):
+                    json_string = response.read().decode('utf-8')
+                    objects = json.loads(json_string)
+                    new_txt = objects.get('translatedText')
+                else:
+                    logger.error(f"{id}) Error:" + str(response.status))
+                    logger.error(f"{id}) {response.read().decode('utf-8')}")
+            finally:
+                connection.close()
 
         except Exception as e:
             logger.error(f"{id}) translation_api:" + str(e))
