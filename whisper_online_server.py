@@ -249,7 +249,7 @@ class ServerProcessor:
                 logger.error(f"{id}) {response.read().decode('utf-8')}")
 
         except Exception as e:
-            logger.error(f"{id}) opencv_api:" + str(e))
+            logger.error(f"{id}) translation_api:" + str(e))
         return new_txt
 
     def remove_non_english_chars(self, text):
