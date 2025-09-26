@@ -129,3 +129,5 @@ dmypy.json
 .pyre/
 wse
 model_cache
+libretranslate_models
+CTranslate2

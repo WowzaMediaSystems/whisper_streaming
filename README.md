@@ -9,19 +9,12 @@ It can also run in standalone mode and pull in an RTMP stream using ffmpeg
 
 ##### Dockerfile
 
-> Dockerfile to build a phyton application using OpenAI Whisper that listens on a port that recieves raw audio and returns JSON for detected speach that gets integrate with the video feed as WebVTT or Embedded 608/708.
+> Dockerfile to build a python application using OpenAI Whisper that listens on a port that receives raw audio and returns JSON for detected speech that gets integrated with the video feed as WebVTT or Embedded 608/708.  Will also make calls to a Libretranslate service to translate text detected into another language and report back
 
-##### local_build.sh
-
->Builds the docker container with the tag `whisper_streaming:local`
-
-##### local_run.sh
-
-> Runs the whipser server docker container with a set of variables.
 
 ##### docker-compose.yaml
 
-> A docker compose file that includes Wowza Streaming Engine, Wowza Streaming Engine Manager and runs Whisper.
+> A docker compose file that includes Whisper and Libretranslate.
 
 
 ### Environment Variables
@@ -36,8 +29,10 @@ It can also run in standalone mode and pull in an RTMP stream using ffmpeg
 |SOURCE_STREAM | none| an RTMP url to pull a stream in.  Uses ffmpeg to capture audio and forwards the raw audio to the service |
 |MIN_CHUNK_SIZE | 1| Minimum audio chunk size in seconds. It waits up to this time to do processing. If the processing takes shorter time, it waits, otherwise it processes the whole segment that was received by this time.|
 |SAMPLING_RATE | 16000| Sample rate of the Audio.  |
-|REPORT_LANGUAGE | none| Language to report back to WSE|
-
+|SOURCE_LANGUAGE  |   en| Language of audio recieved from WSE|
+|REPORT_LANGUAGES |   en| Languages to report back to WSE|
+|LIBRETRANSLATE_HOST | localhost| Host name of the LibreTranslate service |
+|LIBRETRANSLATE_PORT| 5000 | Port of the LibreTranslate service |
 ### JSON
 
 The service returns a json object in the format to the websocket
